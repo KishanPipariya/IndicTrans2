@@ -285,7 +285,7 @@ def main(args):
         do_eval=True,
         fp16=True, # use fp16 for faster training
         logging_strategy="steps",
-        eval_strategy="steps",
+        evaluation_strategy="steps",
         save_strategy="steps",
         logging_steps=100,
         save_total_limit=1,
