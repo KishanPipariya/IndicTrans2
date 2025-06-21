@@ -182,8 +182,8 @@ def compute_metrics_factory(
         assert len(preds) == len(
             labels
         ), "Predictions and Labels have different lengths"
-
-        df = pd.DataFrame({"Predictions": preds, "References": labels}).sample(
+        df = pd.DataFrame({"Predictions": preds, "References": labels})
+        df = df.sample(
             n=min(100, len(df)), replace=False, random_state=42
         )
 
