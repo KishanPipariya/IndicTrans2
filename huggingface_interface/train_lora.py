@@ -184,8 +184,9 @@ def compute_metrics_factory(
         ), "Predictions and Labels have different lengths"
 
         df = pd.DataFrame({"Predictions": preds, "References": labels}).sample(
-            n=n_samples
+            n=min(100, len(df)), replace=False, random_state=42
         )
+
 
         if print_samples:
             for pred, label in zip(df["Predictions"].values, df["References"].values):
