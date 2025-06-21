@@ -4,8 +4,9 @@ import pandas as pd
 from datasets import Dataset
 from sacrebleu.metrics import BLEU, CHRF
 from peft import LoraConfig, get_peft_model
-from IndicTransToolkit import IndicProcessor, IndicDataCollator
-
+# from IndicTransToolkit import IndicProcessor, IndicDataCollator
+from IndicTransToolkit.IndicTransToolkit.processor import IndicProcessor
+from IndicTransToolkit.IndicTransToolkit.collator import IndicDataCollator
 from transformers import (
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
