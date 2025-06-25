@@ -1,5 +1,7 @@
 import os
 import argparse
+from comet import download_model, load_from_checkpoint
+
 import pandas as pd
 from datasets import Dataset
 from sacrebleu.metrics import BLEU, CHRF
@@ -17,7 +19,8 @@ from transformers import (
 
 bleu_metric = BLEU()
 chrf_metric = CHRF()
-
+comet_model_path = download_model("Unbabel/wmt22-comet-da")  # or another COMET model
+comet_metric = load_from_checkpoint(comet_model_path)
 
 def get_arg_parse():
     parser = argparse.ArgumentParser()
@@ -157,7 +160,7 @@ def load_and_process_translation_dataset(
 
 
 def compute_metrics_factory(
-    tokenizer, metric_dict=None, print_samples=False, n_samples=10
+    tokenizer, metric_dict=None, comet_metric=None, print_samples=False, n_samples=10
 ):
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
@@ -192,11 +195,14 @@ def compute_metrics_factory(
             for pred, label in zip(df["Predictions"].values, df["References"].values):
                 print(f" | > Prediction: {pred}")
                 print(f" | > Reference: {label}\n")
-
-        return {
-            metric_name: metric.corpus_score(preds, [labels]).score
-            for (metric_name, metric) in metric_dict.items()
+        scores = {
+            metric_name: metric.corpus_score(preds, [labels]).score for (metric_name, metric) in metric_dict.items()
         }
+        if comet_metric is not None:
+            comet_inputs = [{"src": "", "mt": mt, "ref": ref} for mt, ref in zip(preds, labels)]
+            comet_scores = comet_metric.predict(comet_inputs, batch_size=8, gpus=1 if torch.cuda.is_available() else 0)
+            scores["COMET"] = sum(comet_scores.scores) / len(comet_scores.scores)
+        return 
 
     return compute_metrics
 
@@ -278,6 +284,7 @@ def main(args):
         tokenizer=tokenizer,
         print_samples=args.print_samples,
         metric_dict={"BLEU": bleu_metric, "chrF": chrf_metric},
+        comet_metric=comet_metric
     )
 
     training_args = Seq2SeqTrainingArguments(
