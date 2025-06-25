@@ -164,48 +164,63 @@ def compute_metrics_factory(
     tokenizer, metric_dict=None, comet_metric=None, print_samples=False, n_samples=10
 ):
     def compute_metrics(eval_preds):
-        preds, labels = eval_preds
+        try:
+            preds, labels = eval_preds
 
-        labels[labels == -100] = tokenizer.pad_token_id
-        preds[preds == -100] = tokenizer.pad_token_id
+            labels[labels == -100] = tokenizer.pad_token_id
+            preds[preds == -100] = tokenizer.pad_token_id
 
-        with tokenizer.as_target_tokenizer():
-            preds = [
-                x.strip()
-                for x in tokenizer.batch_decode(
-                    preds, skip_special_tokens=True, clean_up_tokenization_spaces=True
-                )
-            ]
-            labels = [
-                x.strip()
-                for x in tokenizer.batch_decode(
-                    labels, skip_special_tokens=True, clean_up_tokenization_spaces=True
-                )
-            ]
+            with tokenizer.as_target_tokenizer():
+                preds = [
+                    x.strip()
+                    for x in tokenizer.batch_decode(
+                        preds, skip_special_tokens=True, clean_up_tokenization_spaces=True
+                    )
+                ]
+                labels = [
+                    x.strip()
+                    for x in tokenizer.batch_decode(
+                        labels, skip_special_tokens=True, clean_up_tokenization_spaces=True
+                    )
+                ]
 
-        assert len(preds) == len(
-            labels
-        ), "Predictions and Labels have different lengths"
-        df = pd.DataFrame({"Predictions": preds, "References": labels})
-        df = df.sample(
-            n=min(100, len(df)), replace=False, random_state=42
-        )
+            if len(preds) != len(labels):
+                print("Mismatch in predictions and labels length")
+                return {}
 
+            # Optional print of samples
+            if print_samples:
+                df = pd.DataFrame({"Predictions": preds, "References": labels}).sample(n=min(n_samples, len(preds)))
+                for pred, label in zip(df["Predictions"], df["References"]):
+                    print(f" | > Prediction: {pred}")
+                    print(f" | > Reference: {label}\n")
 
-        if print_samples:
-            for pred, label in zip(df["Predictions"].values, df["References"].values):
-                print(f" | > Prediction: {pred}")
-                print(f" | > Reference: {label}\n")
-        scores = {
-            metric_name: metric.corpus_score(preds, [labels]).score for (metric_name, metric) in metric_dict.items()
-        }
-        if comet_metric is not None:
-            comet_inputs = [{"src": "", "mt": mt, "ref": ref} for mt, ref in zip(preds, labels)]
-            comet_scores = comet_metric.predict(comet_inputs, batch_size=8, gpus=1 if torch.cuda.is_available() else 0)
-            scores["COMET"] = sum(comet_scores.scores) / len(comet_scores.scores)
-        return 
+            scores = {}
+
+            # BLEU / chrF
+            if metric_dict:
+                for name, metric in metric_dict.items():
+                    try:
+                        scores[name] = metric.corpus_score(preds, [labels]).score
+                    except Exception as e:
+                        print(f"Error computing {name}: {e}")
+
+            # COMET
+            if comet_metric is not None:
+                try:
+                    comet_inputs = [{"src": "", "mt": mt, "ref": ref} for mt, ref in zip(preds, labels)]
+                    comet_scores = comet_metric.predict(comet_inputs, batch_size=8, gpus=1 if torch.cuda.is_available() else 0)
+                    scores["COMET"] = sum(comet_scores.scores) / len(comet_scores.scores)
+                except Exception as e:
+                    print(f"Error computing COMET: {e}")
+
+            return scores
+        except Exception as e:
+            print(f"Exception in compute_metrics: {e}")
+            return {}
 
     return compute_metrics
+
 
 
 def preprocess_fn(example, tokenizer, **kwargs):
